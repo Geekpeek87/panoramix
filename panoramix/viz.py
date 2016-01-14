@@ -337,6 +337,7 @@ class TableViz(BaseViz):
 class PivotTableViz(BaseViz):
     viz_type = "pivot_table"
     verbose_name = "Pivot Table"
+    custom_query = ""
     css_files = [
         'lib/dataTables/dataTables.bootstrap.css',
         'widgets/viz_pivot_table.css']
@@ -355,6 +356,12 @@ class PivotTableViz(BaseViz):
                 'columns',
                 'metrics',
                 'pandas_aggfunc',
+            )
+        },
+
+        {
+            'label': "CUSTOM QUERY",
+            'fields': (
                 'custom_query',
             )
         },)
@@ -364,18 +371,20 @@ class PivotTableViz(BaseViz):
         groupby = self.form_data.get('groupby')
         columns = self.form_data.get('columns')
         metrics = self.form_data.get('metrics')
-        custom_query = self.form.data.get('custom_query')
-        if not columns and not custom_query:
+        PivotTableViz.custom_query = self.form.data.get('custom_query')
+        if not PivotTableViz.custom_query:
+            PivotTableViz.custom_query = ""
+        if not columns:
             columns = []
-        if not groupby and not custom_query:
+        if not groupby:
             groupby = []
-        if not groupby and not custom_query:
+        if not groupby and not PivotTableViz.custom_query:
             raise Exception("Please choose at least one \"Group by\" field ")
-        if not metrics and not custom_query:
+        if not metrics and not PivotTableViz.custom_query:
             raise Exception("Please choose at least one metric")
         if (
                     any(v in groupby for v in columns) or
-                    any(v in columns for v in groupby) and not custom_query):
+                    any(v in columns for v in groupby) and not PivotTableViz.custom_query):
             raise Exception("groupby and columns can't overlap")
 
         d['groupby'] = list(set(groupby) | set(columns))
@@ -387,13 +396,14 @@ class PivotTableViz(BaseViz):
                 self.form_data.get("granularity") == "all" and
                 'timestamp' in df):
             del df['timestamp']
-        df = df.pivot_table(
-            index=self.form_data.get('groupby'),
-            columns=self.form_data.get('columns'),
-            values=self.form_data.get('metrics'),
-            aggfunc=self.form_data.get('pandas_aggfunc'),
-            margins=True,
-        )
+        if not self.form_data.get('custom_query'):
+            df = df.pivot_table(
+                index=self.form_data.get('groupby'),
+                columns=self.form_data.get('columns'),
+                values=self.form_data.get('metrics'),
+                aggfunc=self.form_data.get('pandas_aggfunc'),
+                margins=True,
+            )
         return df
 
     def get_json_data(self):
