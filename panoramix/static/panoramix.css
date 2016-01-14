@@ -219,3 +219,24 @@ img.loading {
 div.header {
   font-weight: bold;
 }
+
+
+/* CV CSS */
+.navbar-brand a {
+    color: #2196f3;
+    text-decoration-line: none;
+}
+
+.navbar-brand > img {
+    padding-top:10px;
+}
+
+.gridster li.widget{
+    background-color: white;
+    list-style-type: none;
+    overflow: hidden;
+    border: none;
+    border-radius: 2px;
+    -webkit-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
