@@ -105,6 +105,15 @@ class FormFactory(object):
                 'Metric', choices=datasource.metrics_combo,
                 default=default_metric,
                 description="Chose the metric"),
+            'stacked_style': SelectField(
+                'Chart Style', choices=self.choicify(
+                    ['stack', 'stream', 'expand']),
+                default='stack',
+                description=""),
+            'bar_stacked': BetterBooleanField(
+                'Stacked Bars',
+                default=False,
+                description=""),
             'secondary_metric': SelectField(
                 'Color Metric', choices=datasource.metrics_combo,
                 default=default_metric,
@@ -185,6 +194,18 @@ class FormFactory(object):
                     "The time granularity for the visualization. Note that you "
                     "can define arbitrary expression that return a DATETIME "
                     "column in the table editor")),
+            'resample_rule': FreeFormSelectField(
+                'Resample Rule', default='',
+                choices=self.choicify(('1T', '1H', '1D', '7D', '1M', '1AS')),
+                description=("Pandas resample rule")),
+            'resample_how': FreeFormSelectField(
+                'Resample How', default='',
+                choices=self.choicify(('', 'mean', 'sum', 'median')),
+                description=("Pandas resample how")),
+            'resample_fillmethod': FreeFormSelectField(
+                'Resample Fill Method', default='',
+                choices=self.choicify(('', 'ffill', 'bfill')),
+                description=("Pandas resample fill method")),
             'since': FreeFormSelectField(
                 'Since', default="7 days ago",
                 choices=self.choicify([
@@ -227,7 +248,7 @@ class FormFactory(object):
                     choices=self.choicify(
                         [10, 50, 100, 250, 500, 1000, 5000, 10000, 50000])),
             'limit':
-                SelectField(
+                FreeFormSelectField(
                     'Series limit',
                     choices=self.choicify(self.series_limits),
                     default=50,
@@ -324,7 +345,7 @@ class FormFactory(object):
                 default="150",
                 description="Font size for the biggest value in the list"),
             'show_brush': BetterBooleanField(
-                "Range Filter", default=True,
+                "Range Filter", default=False,
                 description=(
                     "Whether to display the time range interactive selector")),
             'include_search': BetterBooleanField(
@@ -378,6 +399,8 @@ class FormFactory(object):
                     "relative time period. Expects relative time delta "
                     "in natural language (example: 24 hours, 7 days, "
                     "56 weeks, 365 days")),
+            'custom_query': TextAreaField(
+                "Custom Query", description="Put your custom query here. Once you use this box to write a custom query the vaues in the other boxes are NOT considered ", default=''),
         }
 
     @staticmethod
@@ -426,11 +449,12 @@ class FormFactory(object):
                 TextField("Super", default=''))
         for fieldset in viz.fieldsetizer():
             for ff in fieldset['fields']:
-                if isinstance(ff, string_types):
-                    ff = [ff]
-                for s in ff:
-                    if s:
-                        setattr(QueryForm, s, px_form_fields[s])
+                if ff:
+                    if isinstance(ff, string_types):
+                        ff = [ff]
+                    for s in ff:
+                        if s:
+                            setattr(QueryForm, s, px_form_fields[s])
 
 
         # datasource type specific form elements

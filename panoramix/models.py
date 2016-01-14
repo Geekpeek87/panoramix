@@ -105,6 +105,7 @@ class Slice(Model, AuditMixinNullable):
         slice_params['slice_id'] = self.id
         slice_params['slice_name'] = self.slice_name
         from werkzeug.urls import Href
+
         href = Href(
             "/panoramix/explore/{self.datasource_type}/"
             "{self.datasource_id}/".format(self=self))
@@ -260,6 +261,7 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
         return (
             "[{self.database}].[{self.table_name}]"
             "(id:{self.id})").format(self=self)
+
     @property
     def full_name(self):
         return "[{self.database}].[{self.table_name}]".format(self=self)
@@ -284,7 +286,7 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
     def metrics_combo(self):
         return sorted(
             [
-                (m.metric_name, m.verbose_name)
+                (m.metric_name, m.verbose_name or m.metric_name)
                 for m in self.metrics],
             key=lambda x: x[1])
 
@@ -303,7 +305,6 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
         using the sqlalchemy expression API (new approach which supports
         all dialects)
         """
-        from pandas import read_sql_query
         qry_start_dttm = datetime.now()
         metrics_exprs = [
             "{} AS {}".format(m.expression, m.metric_name)
@@ -387,6 +388,7 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
             self, groupby, metrics,
             granularity,
             from_dttm, to_dttm,
+            custom_query,
             limit_spec=None,
             filter=None,
             is_timeseries=True,
@@ -395,123 +397,140 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
             extras=None,
             columns=None):
 
-        # For backward compatibility
-        if granularity not in self.dttm_cols:
-            granularity = self.main_dttm_col
-
-        cols = {col.column_name: col for col in self.columns}
         qry_start_dttm = datetime.now()
-        if not self.main_dttm_col:
-            raise Exception(
-                "Datetime column not provided as part table configuration")
-        dttm_expr = cols[granularity].expression
-        if dttm_expr:
-            timestamp = ColumnClause(dttm_expr, is_literal=True).label('timestamp')
-        else:
-            timestamp = literal_column(granularity).label('timestamp')
-        metrics_exprs = [
-            literal_column(m.expression).label(m.metric_name)
-            for m in self.metrics if m.metric_name in metrics]
 
-        if metrics:
-            main_metric_expr = literal_column([
-                m.expression for m in self.metrics
-                if m.metric_name == metrics[0]][0])
-        else:
-            main_metric_expr = literal_column("COUNT(*)")
+        if not custom_query:
+            # For backward compatibility
+            if granularity not in self.dttm_cols:
+                granularity = self.main_dttm_col
+            cols = {col.column_name: col for col in self.columns}
+            if not self.main_dttm_col:
+                raise Exception(
+                    "Datetime column not provided as part table configuration")
+            dttm_expr = cols[granularity].expression
 
-        select_exprs = []
-        groupby_exprs = []
+            if dttm_expr:
+                timestamp = ColumnClause(dttm_expr, is_literal=True).label('timestamp')
+            else:
+                timestamp = literal_column(granularity).label('timestamp')
 
-        if groupby:
+            metrics_exprs = [
+                literal_column(m.expression).label(m.metric_name)
+                for m in self.metrics if m.metric_name in metrics]
+
+            if metrics:
+                main_metric_expr = literal_column([
+                                                      m.expression for m in self.metrics
+                                                      if m.metric_name == metrics[0]][0])
+            else:
+                main_metric_expr = literal_column("COUNT(*)")
+
+            groupby_exprs = []
             select_exprs = []
-            inner_select_exprs = []
-            inner_groupby_exprs = []
-            for s in groupby:
-                col = cols[s]
-                expr = col.expression
-                if expr:
-                    outer = ColumnClause(expr, is_literal=True).label(s)
-                    inner = ColumnClause(expr, is_literal=True).label('__' + s)
-                else:
-                    outer = column(s).label(s)
-                    inner = column(s).label('__' + s)
 
-                groupby_exprs.append(outer)
-                select_exprs.append(outer)
-                inner_groupby_exprs.append(inner)
-                inner_select_exprs.append(inner)
-        elif columns:
-            for s in columns:
-                select_exprs.append(s)
-            metrics_exprs = []
+            if groupby:
+                inner_select_exprs = []
+                inner_groupby_exprs = []
+                for s in groupby:
+                    col = cols[s]
+                    expr = col.expression
+                    if expr:
+                        outer = ColumnClause(expr, is_literal=True).label(s)
+                        inner = ColumnClause(expr, is_literal=True).label('__' + s)
+                    else:
+                        outer = column(s).label(s)
+                        inner = column(s).label('__' + s)
 
-        if is_timeseries:
-            select_exprs += [timestamp]
-            groupby_exprs += [timestamp]
+                    groupby_exprs.append(outer)
+                    select_exprs.append(outer)
+                    inner_groupby_exprs.append(inner)
+                    inner_select_exprs.append(inner)
+            elif columns:
+                for s in columns:
+                    select_exprs.append(s)
+                metrics_exprs = []
 
-        select_exprs += metrics_exprs
-        qry = select(select_exprs)
-        from_clause = table(self.table_name)
-        if not columns:
-            qry = qry.group_by(*groupby_exprs)
+            if is_timeseries:
+                select_exprs += [timestamp]
+                groupby_exprs += [timestamp]
 
-        time_filter = [
-            timestamp >= from_dttm.isoformat(),
-            timestamp <= to_dttm.isoformat(),
-        ]
-        inner_time_filter = copy(time_filter)
-        if inner_from_dttm:
-            inner_time_filter[0] = timestamp >= inner_from_dttm.isoformat()
-        if inner_to_dttm:
-            inner_time_filter[1] = timestamp <= inner_to_dttm.isoformat()
-        where_clause_and = []
-        having_clause_and = []
-        for col, op, eq in filter:
-            col_obj = cols[col]
-            if op in ('in', 'not in'):
-                values = eq.split(",")
-                if col_obj.expression:
-                    cond = ColumnClause(
-                        col_obj.expression, is_literal=True).in_(values)
-                else:
-                    cond = column(col).in_(values)
-                if op == 'not in':
-                    cond = ~cond
-                where_clause_and.append(cond)
-        if extras and 'where' in extras:
-            where_clause_and += [text(extras['where'])]
-        if extras and 'having' in extras:
-            having_clause_and += [text(extras['having'])]
-        qry = qry.where(and_(*(time_filter + where_clause_and)))
-        qry = qry.having(and_(*having_clause_and))
-        if groupby:
-            qry = qry.order_by(desc(main_metric_expr))
-        qry = qry.limit(row_limit)
+            select_exprs += metrics_exprs
+            qry = select(select_exprs)
+            from_clause = table(self.table_name)
+            if not columns:
+                qry = qry.group_by(*groupby_exprs)
 
-        if timeseries_limit and groupby:
-            subq = select(inner_select_exprs)
-            subq = subq.select_from(table(self.table_name))
-            subq = subq.where(and_(*(where_clause_and + inner_time_filter)))
-            subq = subq.group_by(*inner_groupby_exprs)
-            subq = subq.order_by(desc(main_metric_expr))
-            subq = subq.limit(timeseries_limit)
-            on_clause = []
-            for i, gb in enumerate(groupby):
-                on_clause.append(
-                    groupby_exprs[i] == column("__" + gb))
+            time_filter = [
+                timestamp >= from_dttm.isoformat(),
+                timestamp <= to_dttm.isoformat(),
+            ]
+            inner_time_filter = copy(time_filter)
+            if inner_from_dttm:
+                inner_time_filter[0] = timestamp >= inner_from_dttm.isoformat()
+            if inner_to_dttm:
+                inner_time_filter[1] = timestamp <= inner_to_dttm.isoformat()
+            where_clause_and = []
+            having_clause_and = []
+            for col, op, eq in filter:
+                col_obj = cols[col]
+                if op in ('in', 'not in'):
+                    values = eq.split(",")
+                    if col_obj.expression:
+                        cond = ColumnClause(
+                            col_obj.expression, is_literal=True).in_(values)
+                    else:
+                        cond = column(col).in_(values)
+                    if op == 'not in':
+                        cond = ~cond
+                    where_clause_and.append(cond)
+            if extras and 'where' in extras:
+                where_clause_and += [text(extras['where'])]
+            if extras and 'having' in extras:
+                having_clause_and += [text(extras['having'])]
+            qry = qry.where(and_(*(time_filter + where_clause_and)))
+            qry = qry.having(and_(*having_clause_and))
+            if groupby:
+                qry = qry.order_by(desc(main_metric_expr))
+            qry = qry.limit(row_limit)
 
-            from_clause = from_clause.join(subq.alias(), and_(*on_clause))
+            if timeseries_limit and groupby:
+                subq = select(inner_select_exprs)
+                subq = subq.select_from(table(self.table_name))
+                subq = subq.where(and_(*(where_clause_and + inner_time_filter)))
+                subq = subq.group_by(*inner_groupby_exprs)
+                subq = subq.order_by(desc(main_metric_expr))
+                subq = subq.limit(timeseries_limit)
+                on_clause = []
+                for i, gb in enumerate(groupby):
+                    on_clause.append(
+                        groupby_exprs[i] == column("__" + gb))
 
-        qry = qry.select_from(from_clause)
+                from_clause = from_clause.join(subq.alias(), and_(*on_clause))
 
-        engine = self.database.get_sqla_engine()
-        sql = str(qry.compile(engine, compile_kwargs={"literal_binds": True}))
-        df = read_sql_query(
+            qry = qry.select_from(from_clause)
+
+            engine = self.database.get_sqla_engine()
+            sql = str(qry.compile(engine, compile_kwargs={"literal_binds": True}))
+            df = read_sql_query(
+                sql=sql,
+                con=engine
+            )
+            textwrap.dedent(sql)
+
+        else:
+            """
+            Legacy way of querying by building a SQL string without
+            using the sqlalchemy expression API (new approach which supports
+            all dialects)
+            """
+            engine = self.database.get_sqla_engine()
+            sql = custom_query.format(**locals())
+            df = read_sql_query(
             sql=sql,
             con=engine
-        )
-        sql = sqlparse.format(sql, reindent=True)
+            )
+            textwrap.dedent(sql)
+
         return QueryResult(
             df=df, duration=datetime.now() - qry_start_dttm, query=sql)
 
@@ -537,10 +556,10 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
                 datatype = "UNKNOWN"
             dbcol = (
                 db.session
-                .query(TC)
-                .filter(TC.table == self)
-                .filter(TC.column_name == col.name)
-                .first()
+                    .query(TC)
+                    .filter(TC.table == self)
+                    .filter(TC.column_name == col.name)
+                    .first()
             )
             db.session.flush()
             if not dbcol:
@@ -602,9 +621,9 @@ class SqlaTable(Model, Queryable, AuditMixinNullable):
         for metric in metrics:
             m = (
                 db.session.query(M)
-                .filter(M.metric_name == metric.metric_name)
-                .filter(M.table_id == self.id)
-                .first()
+                    .filter(M.metric_name == metric.metric_name)
+                    .filter(M.table_id == self.id)
+                    .first()
             )
             metric.table_id = self.id
             if not m:
@@ -739,7 +758,7 @@ class Datasource(Model, AuditMixinNullable, Queryable):
         return [
             m.json_obj for m in self.metrics
             if m.metric_name == metric_name
-        ][0]
+            ][0]
 
     def latest_metadata(self):
         client = self.cluster.get_pydruid_client()
@@ -775,9 +794,9 @@ class Datasource(Model, AuditMixinNullable, Queryable):
         for col in cols:
             col_obj = (
                 session
-                .query(Column)
-                .filter_by(datasource_name=name, column_name=col)
-                .first()
+                    .query(Column)
+                    .filter_by(datasource_name=name, column_name=col)
+                    .first()
             )
             datatype = cols[col]['type']
             if not col_obj:
@@ -916,6 +935,23 @@ class Datasource(Model, AuditMixinNullable, Queryable):
         client.groupby(**qry)
         query_str += json.dumps(client.query_dict, indent=2)
         df = client.export_pandas()
+        if df is None or df.size == 0:
+            raise Exception("No data was returned.")
+
+        if (
+                not is_timeseries and
+                granularity == "all"
+                and 'timestamp' in df.columns):
+            del df['timestamp']
+
+        # Reordering columns
+        cols = []
+        if 'timestamp' in df.columns:
+            cols += ['timestamp']
+        cols += [col for col in groupby if col in df.columns]
+        cols += [col for col in metrics if col in df.columns]
+        cols += [col for col in df.columns if col not in cols]
+        df = df[cols]
         return QueryResult(
             df=df,
             query=query_str,
@@ -1041,10 +1077,10 @@ class Column(Model, AuditMixinNullable):
         for metric in metrics:
             m = (
                 session.query(M)
-                .filter(M.metric_name == metric.metric_name)
-                .filter(M.datasource_name == self.datasource_name)
-                .filter(Cluster.cluster_name == self.datasource.cluster_name)
-                .first()
+                    .filter(M.metric_name == metric.metric_name)
+                    .filter(M.datasource_name == self.datasource_name)
+                    .filter(Cluster.cluster_name == self.datasource.cluster_name)
+                    .first()
             )
             metric.datasource_name = self.datasource_name
             if not m:

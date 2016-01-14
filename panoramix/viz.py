@@ -5,7 +5,7 @@ import uuid
 
 from flask import flash, request, Markup
 from markdown import markdown
-from pandas.io.json import dumps, to_json
+from pandas.io.json import dumps
 from werkzeug.datastructures import ImmutableMultiDict
 from werkzeug.urls import Href
 import numpy as np
@@ -24,14 +24,14 @@ class BaseViz(object):
     verbose_name = "Base Viz"
     is_timeseries = False
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'metrics', 'groupby',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'metrics', 'groupby',
+            )
+        },)
     js_files = []
     css_files = []
     form_overrides = {}
@@ -75,9 +75,8 @@ class BaseViz(object):
         self.reassignments()
 
     def get_form_override(self, fieldname, attr):
-        if (
-                fieldname in self.form_overrides and
-                attr in self.form_overrides[fieldname]):
+        if (fieldname in self.form_overrides and
+                    attr in self.form_overrides[fieldname]):
             s = self.form_overrides[fieldname][attr]
             if attr == 'label':
                 s = '<label for="{fieldname}">{s}</label>'.format(**locals())
@@ -98,7 +97,7 @@ class BaseViz(object):
             for obj in d['fields']:
                 if isinstance(obj, (tuple, list)):
                     l |= {a for a in obj}
-                else:
+                elif obj:
                     l.add(obj)
         return l
 
@@ -136,6 +135,7 @@ class BaseViz(object):
                 df.timestamp = pd.to_datetime(df.timestamp, utc=False)
                 if self.datasource.offset:
                     df.timestamp += timedelta(hours=self.datasource.offset)
+        df = df.fillna(0)
         return df
 
     @property
@@ -174,6 +174,7 @@ class BaseViz(object):
         Building a query object
         """
         form_data = self.form_data
+        custom_query = form_data.get("custom_query") or []
         groupby = form_data.get("groupby") or []
         metrics = form_data.get("metrics") or ['count']
         granularity = form_data.get("granularity")
@@ -183,7 +184,7 @@ class BaseViz(object):
         since = form_data.get("since", "1 year ago")
         from_dttm = utils.parse_human_datetime(since)
         if from_dttm > datetime.now():
-            from_dttm = datetime.now() - (from_dttm-datetime.now())
+            from_dttm = datetime.now() - (from_dttm - datetime.now())
         until = form_data.get("until", "now")
         to_dttm = utils.parse_human_datetime(until)
         if from_dttm > to_dttm:
@@ -207,6 +208,7 @@ class BaseViz(object):
             'filter': self.query_filters(),
             'timeseries_limit': limit,
             'extras': extras,
+            'custom_query': custom_query,
         }
         return d
 
@@ -245,6 +247,8 @@ class BaseViz(object):
         content = {
             'viz_name': self.viz_type,
             'json_endpoint': self.json_endpoint,
+            'csv_endpoint': self.csv_endpoint,
+            'standalone_endpoint': self.standalone_endpoint,
             'token': self.token,
             'form_data': self.form_data,
         }
@@ -258,29 +262,39 @@ class TableViz(BaseViz):
     viz_type = "table"
     verbose_name = "Table View"
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'row_limit',
-            ('include_search', None),
-        )
-    },
-    {
-        'label': "GROUP BY",
-        'fields': (
-            'groupby',
-            'metrics',
-        )
-    },
-    {
-        'label': "NOT GROUPED BY",
-        'fields': (
-            'all_columns',
-        )
-    },)
-    css_files = ['lib/dataTables/dataTables.bootstrap.css']
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'row_limit',
+                ('include_search', None),
+            )
+        },
+        {
+            'label': "GROUP BY",
+            'fields': (
+                'groupby',
+                'metrics',
+            )
+        },
+        {
+            'label': "NOT GROUPED BY",
+            'fields': (
+                'all_columns',
+            )
+        },
+        {
+            'label': "CUSTOM QUERY",
+            'fields': (
+                'custom_query',
+            )
+        },
+    )
+    css_files = [
+        'lib/dataTables/dataTables.bootstrap.css',
+        'widgets/viz_table.css',
+    ]
     is_timeseries = False
     js_files = [
         'lib/d3.min.js',
@@ -288,7 +302,6 @@ class TableViz(BaseViz):
         'lib/dataTables/dataTables.bootstrap.js',
         'widgets/viz_table.js',
     ]
-    css_files = ['widgets/viz_table.css']
 
     def query_obj(self):
         d = super(TableViz, self).query_obj()
@@ -300,15 +313,13 @@ class TableViz(BaseViz):
         if fd.get('all_columns'):
             d['columns'] = fd.get('all_columns')
             d['groupby'] = []
-        d['is_timeseries'] = False
-        d['timeseries_limit'] = None
         return d
 
     def get_df(self):
         df = super(TableViz, self).get_df()
         if (
-                self.form_data.get("granularity") == "all" and
-                'timestamp' in df):
+                        self.form_data.get("granularity") == "all" and
+                        'timestamp' in df):
             del df['timestamp']
         return df
 
@@ -335,39 +346,39 @@ class PivotTableViz(BaseViz):
         'lib/dataTables/dataTables.bootstrap.js',
         'widgets/viz_pivot_table.js']
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'groupby',
-            'columns',
-            'metrics',
-            'pandas_aggfunc',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'groupby',
+                'columns',
+                'metrics',
+                'pandas_aggfunc',
+                'custom_query',
+            )
+        },)
 
     def query_obj(self):
         d = super(PivotTableViz, self).query_obj()
         groupby = self.form_data.get('groupby')
         columns = self.form_data.get('columns')
         metrics = self.form_data.get('metrics')
-        if not columns:
+        custom_query = self.form.data.get('custom_query')
+        if not columns and not custom_query:
             columns = []
-        if not groupby:
+        if not groupby and not custom_query:
             groupby = []
-        if not groupby:
+        if not groupby and not custom_query:
             raise Exception("Please choose at least one \"Group by\" field ")
-        if not metrics:
+        if not metrics and not custom_query:
             raise Exception("Please choose at least one metric")
         if (
-                any(v in groupby for v in columns) or
-                any(v in columns for v in groupby)):
+                    any(v in groupby for v in columns) or
+                    any(v in columns for v in groupby) and not custom_query):
             raise Exception("groupby and columns can't overlap")
 
         d['groupby'] = list(set(groupby) | set(columns))
-        d['is_timeseries'] = False
-        d['timeseries_limit'] = None
         return d
 
     def get_df(self):
@@ -398,10 +409,10 @@ class MarkupViz(BaseViz):
     verbose_name = "Markup Widget"
     js_files = ['widgets/viz_markup.js']
     fieldsets = (
-    {
-        'label': None,
-        'fields': ('markup_type', 'code')
-    },)
+        {
+            'label': None,
+            'fields': ('markup_type', 'code')
+        },)
     is_timeseries = False
 
     def rendered(self):
@@ -425,16 +436,16 @@ class WordCloudViz(BaseViz):
     verbose_name = "Word Cloud"
     is_timeseries = False
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'groupby', 'metric', 'limit',
-            ('size_from', 'size_to'),
-            'rotation',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'series', 'metric', 'limit',
+                ('size_from', 'size_to'),
+                'rotation',
+            )
+        },)
     js_files = [
         'lib/d3.min.js',
         'lib/d3.layout.cloud.js',
@@ -443,15 +454,16 @@ class WordCloudViz(BaseViz):
 
     def query_obj(self):
         d = super(WordCloudViz, self).query_obj()
-        metric = self.form_data.get('metric')
-        if not metric:
-            raise Exception("Pick a metric!")
+
         d['metrics'] = [self.form_data.get('metric')]
-        d['groupby'] = [d['groupby'][0]]
+        d['groupby'] = [self.form_data.get('series')]
         return d
 
     def get_json_data(self):
         df = self.get_df()
+        # Ordering the columns
+        df = df[[self.form_data.get('series'), self.form_data.get('metric')]]
+        # Labeling the columns for uniform json schema
         df.columns = ['text', 'size']
         return df.to_json(orient="records")
 
@@ -476,24 +488,24 @@ class BubbleViz(NVD3Viz):
     verbose_name = "Bubble Chart"
     is_timeseries = False
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'series', 'entity',
-            'x', 'y',
-            'size', 'limit',
-        )
-    },
-    {
-        'label': 'Chart Options',
-        'fields': (
-            ('x_log_scale', 'y_log_scale'),
-            ('show_legend', None),
-            'max_bubble_size',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'series', 'entity',
+                'x', 'y',
+                'size', 'limit',
+            )
+        },
+        {
+            'label': 'Chart Options',
+            'fields': (
+                ('x_log_scale', 'y_log_scale'),
+                ('show_legend', None),
+                'max_bubble_size',
+            )
+        },)
 
     def query_obj(self):
         form_data = self.form_data
@@ -536,13 +548,9 @@ class BubbleViz(NVD3Viz):
         for k, v in series.items():
             chart_data.append({
                 'key': k,
-                "color": utils.color(k),
+                "color": utils.color(str(k)),
                 'values': v })
-        return dumps({
-            'chart_data': chart_data,
-            'query': self.results.query,
-            'duration': self.results.duration,
-        })
+        return dumps(chart_data)
 
 class BigNumberViz(BaseViz):
     viz_type = "big_number"
@@ -556,22 +564,21 @@ class BigNumberViz(BaseViz):
         'widgets/viz_bignumber.css',
     ]
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'metric',
-            'compare_lag',
-            'compare_suffix',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'metric',
+                'compare_lag',
+                'compare_suffix',
+            )
+        },)
 
     def reassignments(self):
         metric = self.form_data.get('metric')
         if not metric:
             self.form_data['metric'] = self.orig_form_data.get('metrics')
-
 
     def query_obj(self):
         d = super(BigNumberViz, self).query_obj()
@@ -624,11 +631,13 @@ class NVD3TimeSeriesViz(NVD3Viz):
             'description': (
                 "This section contains options "
                 "that allow for advanced analytical post processing "
-                "of query reults"),
+                "of query results"),
             'fields': (
                 ('rolling_type', 'rolling_periods'),
                 'time_compare',
                 'num_period_compare',
+                None,
+                ('resample_how', 'resample_rule',), 'resample_fillmethod'
             ),
         },
     )
@@ -646,6 +655,16 @@ class NVD3TimeSeriesViz(NVD3Viz):
             columns=form_data.get('groupby'),
             values=form_data.get('metrics'))
 
+        fm = form_data.get("resample_fillmethod")
+        if not fm:
+            fm = None
+        how = form_data.get("resample_how")
+        rule = form_data.get("resample_rule")
+        if how and rule:
+            df = df.resample(rule, how=how, fill_method=fm)
+            if not fm:
+                df = df.fillna(0)
+
         if self.sort_series:
             dfs = df.sum()
             dfs.sort(ascending=False)
@@ -658,7 +677,7 @@ class NVD3TimeSeriesViz(NVD3Viz):
         num_period_compare = form_data.get("num_period_compare")
         if num_period_compare:
             num_period_compare = int(num_period_compare)
-            df = df / df.shift(num_period_compare)
+            df = (df / df.shift(num_period_compare)) - 1
             df = df[num_period_compare:]
 
         rolling_periods = form_data.get("rolling_periods")
@@ -725,62 +744,42 @@ class NVD3TimeSeriesViz(NVD3Viz):
             chart_data += self.to_series(
                 df2, classed='dashed', title_suffix="---")
             chart_data = sorted(chart_data, key=lambda x: x['key'])
-
-        data = {
-            'chart_data': chart_data,
-            'query': self.results.query,
-            'duration': self.results.duration,
-        }
-        return dumps(data)
+        return dumps(chart_data)
 
 
 class NVD3TimeSeriesBarViz(NVD3TimeSeriesViz):
     viz_type = "bar"
+    sort_series = True
     verbose_name = "Time Series - Bar Chart"
-    fieldsets = (
-    {
-        'label': None,
+    fieldsets = [NVD3TimeSeriesViz.fieldsets[0]] + [{
+        'label': 'Chart Options',
         'fields': (
-            'granularity', ('since', 'until'),
-            'metrics',
-            'groupby', 'limit',
-            ('rolling_type', 'rolling_periods'),
-            'show_legend',
-        )
-    },)
+            ('show_brush', 'show_legend'),
+            ('rich_tooltip', 'y_axis_zero'),
+            ('y_log_scale', 'contribution'),
+            ('y_axis_format', 'x_axis_showminmax'),
+            ('line_interpolation', 'bar_stacked'),
+        ), }] + [NVD3TimeSeriesViz.fieldsets[2]]
 
 
 class NVD3CompareTimeSeriesViz(NVD3TimeSeriesViz):
     viz_type = 'compare'
     verbose_name = "Time Series - Percent Change"
-    fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity', ('since', 'until'),
-            'metrics',
-            'groupby', 'limit',
-            ('rolling_type', 'rolling_periods'),
-            'show_legend',
-        )
-    },)
 
 
 class NVD3TimeSeriesStackedViz(NVD3TimeSeriesViz):
     viz_type = "area"
     verbose_name = "Time Series - Stacked"
     sort_series = True
-    fieldsets = (
-    {
-        'label': None,
+    fieldsets = [NVD3TimeSeriesViz.fieldsets[0]] + [{
+        'label': 'Chart Options',
         'fields': (
-            'granularity', ('since', 'until'),
-            'metrics',
-            'groupby', 'limit',
-            ('rolling_type', 'rolling_periods'),
-            ('rich_tooltip', 'show_legend'),
-        )
-    },)
+            ('show_brush', 'show_legend'),
+            ('rich_tooltip', 'y_axis_zero'),
+            ('y_log_scale', 'contribution'),
+            ('y_axis_format', 'x_axis_showminmax'),
+            ('line_interpolation', 'stacked_style'),
+        ), }] + [NVD3TimeSeriesViz.fieldsets[2]]
 
 
 class DistributionPieViz(NVD3Viz):
@@ -788,15 +787,16 @@ class DistributionPieViz(NVD3Viz):
     verbose_name = "Distribution - NVD3 - Pie Chart"
     is_timeseries = False
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            ('since', 'until'),
-            'metrics', 'groupby',
-            'limit',
-            ('donut', 'show_legend'),
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'metrics', 'groupby',
+                'limit',
+                ('donut', 'show_legend'),
+            )
+        },)
 
     def query_obj(self):
         d = super(DistributionPieViz, self).query_obj()
@@ -816,11 +816,7 @@ class DistributionPieViz(NVD3Viz):
         df = df.reset_index()
         df.columns = ['x', 'y']
         df['color'] = map(utils.color, df.x)
-        return dumps({
-            'chart_data': df.to_dict(orient="records"),
-            'query': self.results.query,
-            'duration': self.results.duration,
-        })
+        return dumps(df.to_dict(orient="records"))
 
 
 class DistributionBarViz(DistributionPieViz):
@@ -831,10 +827,11 @@ class DistributionBarViz(DistributionPieViz):
     {
         'label': None,
         'fields': (
-            'metrics', 'groupby',
+            'granularity',
             ('since', 'until'),
+            'metrics', 'groupby',
             'limit',
-            ('show_legend', None),
+            ('show_legend', 'bar_stacked'),
         )
     },)
 
@@ -868,11 +865,7 @@ class DistributionBarViz(DistributionPieViz):
                     for i, ds in enumerate(df.timestamp)]
             }
             chart_data.append(d)
-        return dumps({
-            'chart_data': chart_data,
-            'query': self.results.query,
-            'duration': self.results.duration,
-        })
+        return dumps(chart_data)
 
 
 class SunburstViz(BaseViz):
@@ -884,16 +877,16 @@ class SunburstViz(BaseViz):
         'widgets/viz_sunburst.js']
     css_files = ['widgets/viz_sunburst.css']
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'groupby',
-            'metric', 'secondary_metric',
-            'row_limit',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'groupby',
+                'metric', 'secondary_metric',
+                'row_limit',
+            )
+        },)
     form_overrides = {
         'metric': {
             'label': 'Primary Metric',
@@ -951,16 +944,16 @@ class SankeyViz(BaseViz):
         'widgets/viz_sankey.js']
     css_files = ['widgets/viz_sankey.css']
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'groupby',
-            'metric',
-            'row_limit',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'groupby',
+                'metric',
+                'row_limit',
+            )
+        },)
     form_overrides = {
         'groupby': {
             'label': 'Source / Target',
@@ -992,29 +985,30 @@ class DirectedForceViz(BaseViz):
         'widgets/viz_directed_force.js']
     css_files = ['widgets/viz_directed_force.css']
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'groupby',
-            'metric',
-            'row_limit',
-        )
-    },
-    {
-        'label': 'Force Layout',
-        'fields': (
-            'link_length',
-            'charge',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'groupby',
+                'metric',
+                'row_limit',
+            )
+        },
+        {
+            'label': 'Force Layout',
+            'fields': (
+                'link_length',
+                'charge',
+            )
+        },)
     form_overrides = {
         'groupby': {
             'label': 'Source / Target',
             'description': "Choose a source and a target",
         },
     }
+
     def query_obj(self):
         qry = super(DirectedForceViz, self).query_obj()
         if len(self.form_data['groupby']) != 2:
@@ -1040,24 +1034,24 @@ class WorldMapViz(BaseViz):
         'widgets/viz_world_map.js']
     css_files = ['widgets/viz_world_map.css']
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'entity',
-            'country_fieldtype',
-            'metric',
-        )
-    },
-    {
-        'label': 'Bubbles',
-        'fields': (
-            ('show_bubbles', None),
-            'secondary_metric',
-            'max_bubble_size',
-        )
-    })
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'entity',
+                'country_fieldtype',
+                'metric',
+            )
+        },
+        {
+            'label': 'Bubbles',
+            'fields': (
+                ('show_bubbles', None),
+                'secondary_metric',
+                'max_bubble_size',
+            )
+        })
     form_overrides = {
         'entity': {
             'label': 'Country Field',
