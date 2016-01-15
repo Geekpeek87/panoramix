@@ -48,7 +48,7 @@ SHOW_STACKTRACE = True
 APP_NAME = "Panoramix"
 
 # Uncomment to setup Setup an App icon
-APP_ICON = "/static/img/chaudron-blue.png"
+APP_ICON = "/static/img/chaudron_white.png"
 
 # Druid query timezone
 # tz.tzutc() : Using utc timezone
