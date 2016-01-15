@@ -4,7 +4,7 @@
 
     {% block begin_content scoped %}
         <div class="table-responsive">
-        <table class="table table-bordered table-hover">
+        <table class="table table-striped table-hover">
     {% endblock %}
 
     {% block begin_loop_header scoped %}
@@ -25,13 +25,13 @@
                 {% set res = item | get_link_order(modelview_name) %}
                     {% if res == 2 %}
                     <th><a href={{ item | link_order(modelview_name) }}>{{label_columns.get(item)}}
-                    <i class="fa fa-chevron-up pull-right"></i></a></th>
+                    <i class="fa fa-chevron-up pt4"></i></a></th>
                 {% elif res == 1 %}
                     <th><a href={{ item | link_order(modelview_name) }}>{{label_columns.get(item)}}
-                    <i class="fa fa-chevron-down pull-right"></i></a></th>
+                    <i class="fa fa-chevron-down pt4"></i></a></th>
                 {% else %}
                     <th><a href={{ item | link_order(modelview_name) }}>{{label_columns.get(item)}}
-                    <i class="fa fa-arrows-v pull-right"></i></a></th>
+                    <i class="fa fa-arrows-v pt4"></i></a></th>
                 {% endif %}
             {% else %}
                 <th>{{label_columns.get(item)}}</th>

@@ -226,22 +226,21 @@ div.header {
 
 
 /* CV CSS */
-/*
 
 .navbar {
     background-color: #fff;
 }
 
 .navbar-brand > a {
-    color: #2196f3;
+    color: #ffffff;
     text-decoration: none;
 }
 
 .navbar-brand > a:hover {
-    color: #2196f3;
+    color: #ffffff;
     text-decoration: none;
 }
-*/
+
 
 .navbar-brand > img {
     padding-top: 8px;
@@ -292,13 +291,13 @@ legend.legend-style {
 
 div.page-header {
     background: #fff;
-    margin: -22px -16px 12px -13px;
+    margin: -26px -16px 12px -13px;
     padding: 14px 16px 8px 16px;
 }
 
 .page-title {
     display: inline-flex;
-    align-items: center;
+    vertical-align:middle;
 }
 
 form div {
@@ -313,4 +312,8 @@ table.dataTable {
 }
 .slice-button-group button {
     margin: 0 4px;
+}
+
+.pt4 {
+    padding-top: 4px;
 }

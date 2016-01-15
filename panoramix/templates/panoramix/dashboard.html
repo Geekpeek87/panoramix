@@ -44,15 +44,10 @@ body {
   </div>
 </div>
 
-<div class="title">
-    <div class="row">
-      <div class="col-md-2"></div>
-      <div class="col-md-8">
-        <h2>
-          {{ dashboard.dashboard_title }}
-        </h2>
-      </div>
-      <div class="col-md-2">
+<div class="page-header panel">
+        <h5 class="page-title">
+          Dashboard: <strong>{{ dashboard.dashboard_title }}</strong>
+        </h5>
         <div class="btn-group pull-right" role="group" >
           <button type="button" id="filters" class="btn btn-default" data-toggle="tooltip" title="View the list of active filters">
             <i class="fa fa-filter"></i>
@@ -66,8 +61,6 @@ body {
           <button type="button" id="savedash" class="btn btn-default">
             <i class="fa fa-save"></i>
           </button>
-        </div>
-      </div>
     </div>
 </div>
 <div class="gridster content_fluid">
@@ -76,7 +69,7 @@ body {
           {% set pos = pos_dict.get(slice.id, {}) %}
           {% set viz = slice.viz %}
           <li
-              id="slice_{{ slice.id }}"
+              id="slice_{{ slice.id }}"a
               slice_id="{{ slice.id }}"
               class="widget {{ slice.viz.viz_type }}"
               data-slice="{{ slice.json_data }}"
