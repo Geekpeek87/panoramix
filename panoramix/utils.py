@@ -2,7 +2,7 @@ from datetime import datetime
 import functools
 import hashlib
 import json
-
+import unicodedata
 from dateutil.parser import parse
 from sqlalchemy.types import TypeDecorator, TEXT
 from flask import g, request, Markup
@@ -11,32 +11,40 @@ import parsedatetime
 
 from panoramix import db
 
+from pyparsing import Literal, CaselessLiteral, Word, Upcase, delimitedList, Optional, \
+    Combine, Group, alphas, nums, alphanums, ParseException, Forward, oneOf, quotedString, \
+    ZeroOrMore, restOfLine, Keyword, Each
+
 
 class memoized(object):
-   """Decorator that caches a function's return value each time it is called.
-   If called later with the same arguments, the cached value is returned, and
-   not re-evaluated.
-   """
-   def __init__(self, func):
-      self.func = func
-      self.cache = {}
-   def __call__(self, *args):
-      try:
-         return self.cache[args]
-      except KeyError:
-         value = self.func(*args)
-         self.cache[args] = value
-         return value
-      except TypeError:
-         # uncachable -- for instance, passing a list as an argument.
-         # Better to not cache than to blow up entirely.
-         return self.func(*args)
-   def __repr__(self):
-      """Return the function's docstring."""
-      return self.func.__doc__
-   def __get__(self, obj, objtype):
-      """Support instance methods."""
-      return functools.partial(self.__call__, obj)
+    """Decorator that caches a function's return value each time it is called.
+    If called later with the same arguments, the cached value is returned, and
+    not re-evaluated.
+    """
+
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+
+    def __call__(self, *args):
+        try:
+            return self.cache[args]
+        except KeyError:
+            value = self.func(*args)
+            self.cache[args] = value
+            return value
+        except TypeError:
+            # uncachable -- for instance, passing a list as an argument.
+            # Better to not cache than to blow up entirely.
+            return self.func(*args)
+
+    def __repr__(self):
+        """Return the function's docstring."""
+        return self.func.__doc__
+
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        return functools.partial(self.__call__, obj)
 
 
 def parse_human_datetime(s):
@@ -92,6 +100,7 @@ def parse_human_timedelta(s):
 class JSONEncodedDict(TypeDecorator):
     """Represents an immutable structure as a json-encoded string."""
     impl = TEXT
+
     def process_bind_param(self, value, dialect):
         if value is not None:
             value = json.dumps(value)
@@ -143,6 +152,7 @@ def init():
     from panoramix import appbuilder
     from panoramix import models
     from flask_appbuilder.security.sqla import models as ab_models
+
     sm = appbuilder.sm
     alpha = sm.add_role("Alpha")
     admin = sm.add_role("Admin")
@@ -159,27 +169,27 @@ def init():
     gamma = sm.add_role("Gamma")
     for perm in perms:
         s = perm.permission.name
-        if(
-                perm.view_menu.name not in (
-                    'UserDBModelView',
-                    'RoleModelView',
-                    'ResetPasswordView',
-                    'Security') and
-                perm.permission.name not in (
-                    'can_edit',
-                    'can_add',
-                    'can_save',
-                    'can_download',
-                    'muldelete',
-                    'all_datasource_access',
-                    'datasource_access',
-                )):
+        if (
+                        perm.view_menu.name not in (
+                            'UserDBModelView',
+                            'RoleModelView',
+                            'ResetPasswordView',
+                            'Security') and
+                        perm.permission.name not in (
+                            'can_edit',
+                            'can_add',
+                            'can_save',
+                            'can_download',
+                            'muldelete',
+                            'all_datasource_access',
+                            'datasource_access',
+                    )):
             sm.add_permission_role(gamma, perm)
     session = db.session()
     table_perms = [
-            table.perm for table in session.query(models.SqlaTable).all()]
+        table.perm for table in session.query(models.SqlaTable).all()]
     table_perms += [
-            table.perm for table in session.query(models.Datasource).all()]
+        table.perm for table in session.query(models.Datasource).all()]
     for table_perm in table_perms:
         merge_perm(sm, 'datasource_access', table.perm)
 
@@ -188,12 +198,14 @@ def log_this(f):
     '''
     Decorator to log user actions
     '''
+
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         user_id = None
         if g.user:
             user_id = g.user.id
         from panoramix import models
+
         log = models.Log(
             action=f.__name__,
             json=json.dumps(request.args.to_dict()),
@@ -203,6 +215,7 @@ def log_this(f):
         db.session.commit()
 
         return f(*args, **kwargs)
+
     return wrapper
 
 
@@ -231,10 +244,79 @@ def markdown(s):
     return md(s, [
         'markdown.extensions.tables',
         'markdown.extensions.fenced_code',
-        'markdown.extensions.codehilite',])
+        'markdown.extensions.codehilite', ])
 
 
 def readfile(filepath):
     with open(filepath) as f:
         content = f.read()
     return content
+
+
+def pivot_viz_custom_query_parser(cq):
+    sql = str(cq)
+
+    # define SQL tokens
+    selectStmt = Forward()
+    selectToken = Keyword("select", caseless=True)
+    fromToken = Keyword("from", caseless=True)
+    sumToken = Keyword("sum", caseless=True)
+    countToken = Keyword("count", caseless=True)
+
+    ident = Word(alphas, alphanums + "_$()-*").setName("identifier")
+    columnName = delimitedList(ident, ".", combine=True)
+    columnNameList = Group(delimitedList(columnName))
+    tableName = delimitedList(ident, ".", combine=True)
+    tableNameList = Group(delimitedList(tableName))
+
+    whereExpression = Forward()
+    selectExpression = Forward()
+    sum_count_Expression = Forward()
+
+    and_ = Keyword("and", caseless=True)
+    or_ = Keyword("or", caseless=True)
+    in_ = Keyword("in", caseless=True)
+    as_ = Keyword("as", caseless=True)
+    orderby = Keyword("order by", caseless=True)
+    groupby = Keyword("group by", caseless=True)
+
+    columns = Group(delimitedList(ident))
+    columnVal = (nums | quotedString)
+
+    E = CaselessLiteral("E")
+    binop = oneOf("= != < > >= <= eq ne lt le gt ge", caseless=True)
+    arithSign = Word("+-", exact=1)
+    realNum = Combine(Optional(arithSign) + (Word(nums) + "." + Optional(Word(nums)) |
+                                             ("." + Word(nums))) +
+                      Optional(E + Optional(arithSign) + Word(nums)))
+    intNum = Combine(Optional(arithSign) + Word(nums) +
+                     Optional(E + Optional("+") + Word(nums)))
+
+    columnRval = realNum | intNum | quotedString | columnName  # need to add support for alg expressions
+    whereCondition = Group(
+        (columnName + binop + columnRval) |
+        (columnName + in_ + "(" + delimitedList(columnRval) + ")") |
+        (columnName + in_ + "(" + selectStmt + ")") |
+        ("(" + whereExpression + ")")
+    )
+    whereExpression << whereCondition + ZeroOrMore((and_ | or_) + whereExpression)
+    selectExpression << columnNameList + ZeroOrMore(as_ + ident)
+    sum_count_Expression << ZeroOrMore((sumToken | countToken) + "(" + ("*" | ident) + ")") + ZeroOrMore(as_ + ident)
+
+    # define the grammar
+    selectStmt << (selectToken +
+                   ('*' | selectExpression).setResultsName("columns") +
+                   fromToken +
+                   tableNameList.setResultsName("tables") +
+                   Optional(Group(CaselessLiteral("where") + whereExpression), "").setResultsName("where") +
+                   Each([Optional(groupby + columns("groupby"), '').setDebug(False),
+                         Optional(orderby + columns("orderby"), '').setDebug(False)
+                         ])
+                   )
+
+    simpleSQL = selectStmt
+    # define Oracle comment format, and ignore them
+    oracleSqlComment = "--" + restOfLine
+    simpleSQL.ignore(oracleSqlComment)
+    tokens = simpleSQL.parseString(sql)
+    return tokens
