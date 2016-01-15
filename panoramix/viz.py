@@ -11,6 +11,8 @@ from werkzeug.urls import Href
 import numpy as np
 import pandas as pd
 
+from utils import pivot_viz_custom_query_parser as piv_custom_query
+
 from panoramix import app, utils
 from panoramix.forms import FormFactory
 
@@ -263,6 +265,12 @@ class TableViz(BaseViz):
     verbose_name = "Table View"
     fieldsets = (
         {
+            'label': "CUSTOM QUERY",
+            'fields': (
+                'custom_query',
+            )
+        },
+        {
             'label': None,
             'fields': (
                 'granularity',
@@ -282,12 +290,6 @@ class TableViz(BaseViz):
             'label': "NOT GROUPED BY",
             'fields': (
                 'all_columns',
-            )
-        },
-        {
-            'label': "CUSTOM QUERY",
-            'fields': (
-                'custom_query',
             )
         },
     )
@@ -348,6 +350,12 @@ class PivotTableViz(BaseViz):
         'widgets/viz_pivot_table.js']
     fieldsets = (
         {
+            'label': "CUSTOM QUERY",
+            'fields': (
+                'custom_query',
+            )
+        },
+        {
             'label': None,
             'fields': (
                 'granularity',
@@ -358,13 +366,7 @@ class PivotTableViz(BaseViz):
                 'pandas_aggfunc',
             )
         },
-
-        {
-            'label': "CUSTOM QUERY",
-            'fields': (
-                'custom_query',
-            )
-        },)
+        )
 
     def query_obj(self):
         d = super(PivotTableViz, self).query_obj()
@@ -392,11 +394,12 @@ class PivotTableViz(BaseViz):
 
     def get_df(self):
         df = super(PivotTableViz, self).get_df()
+        custom_query = self.form_data.get('custom_query')
         if (
                 self.form_data.get("granularity") == "all" and
                 'timestamp' in df):
             del df['timestamp']
-        if not self.form_data.get('custom_query'):
+        if not custom_query:
             df = df.pivot_table(
                 index=self.form_data.get('groupby'),
                 columns=self.form_data.get('columns'),
