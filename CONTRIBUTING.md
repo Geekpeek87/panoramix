@@ -9,7 +9,7 @@ You can contribute in many ways:
 
 ### Report Bugs
 
-Report bugs through Gihub
+Report bugs through Github
 
 If you are reporting a bug, please include:
 
@@ -34,8 +34,8 @@ hooks and operators are very welcomed!
 
 ### Documentation
 
-Airflow could always use better documentation,
-whether as part of the official Airflow docs,
+Panoramix could always use better documentation,
+whether as part of the official Panoramix docs,
 in docstrings, `docs/*.rst` or even on the web as blog posts or
 articles.
 
@@ -51,11 +51,11 @@ If you are proposing a feature:
 -   Remember that this is a volunteer-driven project, and that
     contributions are welcome :)
 
-## Latests Documentation
+## Latest Documentation
 
-[API Documentation](http://pythonhosted.com/airflow)
+[API Documentation](http://pythonhosted.com/panoramix)
 
-## Testing
+## Setting up a development environment
 
 Install development requirements:
 

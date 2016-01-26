@@ -15,7 +15,7 @@ There' a ``from local_config import *`` at the end of this file.
 # ---------------------------------------------------------
 # Panoramix specifix config
 # ---------------------------------------------------------
-ROW_LIMIT = 50000
+ROW_LIMIT = 10000
 WEBSERVER_THREADS = 8
 
 PANORAMIX_WEBSERVER_PORT = 8088
@@ -48,7 +48,7 @@ SHOW_STACKTRACE = True
 APP_NAME = "Panoramix"
 
 # Uncomment to setup Setup an App icon
-APP_ICON = "/static/img/chaudron_white.png"
+APP_ICON = "/static/img/chaudron_blue.png"
 
 # Druid query timezone
 # tz.tzutc() : Using utc timezone

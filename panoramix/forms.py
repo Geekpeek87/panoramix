@@ -400,7 +400,8 @@ class FormFactory(object):
                     "in natural language (example: 24 hours, 7 days, "
                     "56 weeks, 365 days")),
             'custom_query': TextAreaField(
-                "Custom Query", description="Put your custom query here. Once you use this box to write a custom query the vaues in the other boxes are NOT considered ", default=''),
+                "Custom Query",
+                description="Put your custom query here", default=''),
         }
 
     @staticmethod
@@ -458,20 +459,20 @@ class FormFactory(object):
 
 
         # datasource type specific form elements
-        if datasource.__class__.__name__ == 'SqlaTable':
-            QueryForm.fieldsets += ({
-                'label': 'SQL',
-                'fields': ['where', 'having'],
-                'description': (
-                    "This section exposes ways to include snippets of "
-                    "SQL in your query"),
-            },)
-            setattr(QueryForm, 'where', px_form_fields['where'])
-            setattr(QueryForm, 'having', px_form_fields['having'])
-
-            if 'granularity' in viz.flat_form_fields():
-                setattr(
-                    QueryForm,
-                    'granularity', px_form_fields['granularity_sqla'])
-                field_css_classes['granularity'] = ['form-control', 'select2']
+        # if datasource.__class__.__name__ == 'SqlaTable':
+        #     QueryForm.fieldsets += ({
+        #         'label': 'SQL',
+        #         'fields': ['where', 'having'],
+        #         'description': (
+        #             "This section exposes ways to include snippets of "
+        #             "SQL in your query"),
+        #     },)
+        #     setattr(QueryForm, 'where', px_form_fields['where'])
+        #     setattr(QueryForm, 'having', px_form_fields['having'])
+        #
+        #     if 'granularity' in viz.flat_form_fields():
+        #         setattr(
+        #             QueryForm,
+        #             'granularity', px_form_fields['granularity_sqla'])
+        #         field_css_classes['granularity'] = ['form-control', 'select2']
         return QueryForm

@@ -11,8 +11,6 @@ from werkzeug.urls import Href
 import numpy as np
 import pandas as pd
 
-from utils import pivot_viz_custom_query_parser as piv_custom_query
-
 from panoramix import app, utils
 from panoramix.forms import FormFactory
 
@@ -178,6 +176,7 @@ class BaseViz(object):
         form_data = self.form_data
         custom_query = form_data.get("custom_query") or []
         groupby = form_data.get("groupby") or []
+        columns = form_data.get("colummns") or []
         metrics = form_data.get("metrics") or ['count']
         granularity = form_data.get("granularity")
         limit = int(form_data.get("limit", 0))
@@ -205,6 +204,7 @@ class BaseViz(object):
             'to_dttm': to_dttm,
             'is_timeseries': self.is_timeseries,
             'groupby': groupby,
+            'columns': columns,
             'metrics': metrics,
             'row_limit': row_limit,
             'filter': self.query_filters(),
@@ -260,6 +260,7 @@ class BaseViz(object):
     def json_data(self):
         return dumps(self.data)
 
+
 class TableViz(BaseViz):
     viz_type = "table"
     verbose_name = "Table View"
@@ -273,23 +274,8 @@ class TableViz(BaseViz):
         {
             'label': None,
             'fields': (
-                'granularity',
-                ('since', 'until'),
-                'row_limit',
-                ('include_search', None),
-            )
-        },
-        {
-            'label': "GROUP BY",
-            'fields': (
-                'groupby',
+                # 'groupby',
                 'metrics',
-            )
-        },
-        {
-            'label': "NOT GROUPED BY",
-            'fields': (
-                'all_columns',
             )
         },
     )
@@ -339,7 +325,6 @@ class TableViz(BaseViz):
 class PivotTableViz(BaseViz):
     viz_type = "pivot_table"
     verbose_name = "Pivot Table"
-    custom_query = ""
     css_files = [
         'lib/dataTables/dataTables.bootstrap.css',
         'widgets/viz_pivot_table.css']
@@ -350,43 +335,33 @@ class PivotTableViz(BaseViz):
         'widgets/viz_pivot_table.js']
     fieldsets = (
         {
-            'label': "CUSTOM QUERY",
-            'fields': (
-                'custom_query',
-            )
-        },
-        {
             'label': None,
             'fields': (
-                'granularity',
-                ('since', 'until'),
+                'custom_query',
                 'groupby',
                 'columns',
-                'metrics',
+                # 'metrics',
                 'pandas_aggfunc',
             )
-        },
-        )
+        },)
 
     def query_obj(self):
         d = super(PivotTableViz, self).query_obj()
         groupby = self.form_data.get('groupby')
         columns = self.form_data.get('columns')
-        metrics = self.form_data.get('metrics')
-        PivotTableViz.custom_query = self.form.data.get('custom_query')
-        if not PivotTableViz.custom_query:
-            PivotTableViz.custom_query = ""
+        # metrics = self.form_data.get('metrics')
+        custom_query = self.form.data.get('custom_query')
         if not columns:
             columns = []
         if not groupby:
             groupby = []
-        if not groupby and not PivotTableViz.custom_query:
+        if not groupby:
             raise Exception("Please choose at least one \"Group by\" field ")
-        if not metrics and not PivotTableViz.custom_query:
-            raise Exception("Please choose at least one metric")
+        # if not metrics and not custom_query:
+        #     raise Exception("Please choose at least one metric")
         if (
                     any(v in groupby for v in columns) or
-                    any(v in columns for v in groupby) and not PivotTableViz.custom_query):
+                    any(v in columns for v in groupby) and not custom_query):
             raise Exception("groupby and columns can't overlap")
 
         d['groupby'] = list(set(groupby) | set(columns))
@@ -394,19 +369,17 @@ class PivotTableViz(BaseViz):
 
     def get_df(self):
         df = super(PivotTableViz, self).get_df()
-        custom_query = self.form_data.get('custom_query')
         if (
                 self.form_data.get("granularity") == "all" and
                 'timestamp' in df):
             del df['timestamp']
-        if not custom_query:
-            df = df.pivot_table(
-                index=self.form_data.get('groupby'),
-                columns=self.form_data.get('columns'),
-                values=self.form_data.get('metrics'),
-                aggfunc=self.form_data.get('pandas_aggfunc'),
-                margins=True,
-            )
+        df = df.pivot_table(
+            index=self.form_data.get('groupby'),
+            columns=self.form_data.get('columns'),
+            # values=self.form_data.get('metrics'),
+            aggfunc=self.form_data.get('pandas_aggfunc'),
+            margins=True,
+        )
         return df
 
     def get_json_data(self):
@@ -562,8 +535,9 @@ class BubbleViz(NVD3Viz):
             chart_data.append({
                 'key': k,
                 "color": utils.color(str(k)),
-                'values': v })
+                'values': v})
         return dumps(chart_data)
+
 
 class BigNumberViz(BaseViz):
     viz_type = "big_number"
@@ -606,7 +580,7 @@ class BigNumberViz(BaseViz):
         form_data = self.form_data
         df = self.get_df()
         df = df.sort(columns=df.columns[0])
-        df['timestamp'] = df[[0]].astype(np.int64) // 10**9
+        df['timestamp'] = df[[0]].astype(np.int64) // 10 ** 9
         compare_lag = form_data.get("compare_lag", "")
         compare_lag = int(compare_lag) if compare_lag and compare_lag.isdigit() else 0
         d = {
@@ -636,8 +610,8 @@ class NVD3TimeSeriesViz(NVD3Viz):
                 ('show_brush', 'show_legend'),
                 ('rich_tooltip', 'y_axis_zero'),
                 ('y_log_scale', 'contribution'),
-                ('y_axis_format', 'x_axis_showminmax'),
-                ('line_interpolation', None),
+                ('x_axis_format', 'y_axis_format'),
+                ('line_interpolation', 'x_axis_showminmax'),
             ),
         }, {
             'label': 'Advanced Analytics',
@@ -759,7 +733,6 @@ class NVD3TimeSeriesViz(NVD3Viz):
             chart_data = sorted(chart_data, key=lambda x: x['key'])
         return dumps(chart_data)
 
-
 class NVD3TimeSeriesBarViz(NVD3TimeSeriesViz):
     viz_type = "bar"
     sort_series = True
@@ -837,16 +810,16 @@ class DistributionBarViz(DistributionPieViz):
     verbose_name = "Distribution - Bar Chart"
     is_timeseries = False
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'metrics', 'groupby',
-            'limit',
-            ('show_legend', 'bar_stacked'),
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'metrics', 'groupby',
+                'limit',
+                ('show_legend', 'bar_stacked'),
+            )
+        },)
 
     def get_df(self):
         df = super(DistributionPieViz, self).get_df()
@@ -1079,6 +1052,7 @@ class WorldMapViz(BaseViz):
             'description': ("Metric that defines the size of the bubble"),
         },
     }
+
     def query_obj(self):
         qry = super(WorldMapViz, self).query_obj()
         qry['metrics'] = [
@@ -1088,6 +1062,7 @@ class WorldMapViz(BaseViz):
 
     def get_json_data(self):
         from panoramix.data import countries
+
         df = self.get_df()
         cols = [self.form_data.get('entity')]
         metric = self.form_data.get('metric')
@@ -1125,21 +1100,22 @@ class FilterBoxViz(BaseViz):
     css_files = [
         'widgets/viz_filter_box.css']
     fieldsets = (
-    {
-        'label': None,
-        'fields': (
-            'granularity',
-            ('since', 'until'),
-            'groupby',
-            'metric',
-        )
-    },)
+        {
+            'label': None,
+            'fields': (
+                'granularity',
+                ('since', 'until'),
+                'groupby',
+                'metric',
+            )
+        },)
     form_overrides = {
         'groupby': {
             'label': 'Filter fields',
             'description': "The fields you want to filter on",
         },
     }
+
     def query_obj(self):
         qry = super(FilterBoxViz, self).query_obj()
         groupby = self.form_data['groupby']
@@ -1159,9 +1135,9 @@ class FilterBoxViz(BaseViz):
             df = super(FilterBoxViz, self).get_df(qry)
             d[flt] = [
                 {'id': row[0],
-                'text': row[0],
-                'filter': flt,
-                'metric': row[1]}
+                 'text': row[0],
+                 'filter': flt,
+                 'metric': row[1]}
                 for row in df.itertuples(index=False)]
         return d
 
