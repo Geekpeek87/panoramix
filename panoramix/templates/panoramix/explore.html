@@ -98,31 +98,31 @@
               </div>
             </fieldset>
           {% endfor %}
-          <fieldset class="fs-style">
-            <legend class="legend-style">
-              <span class="legend_label">Filters</span>
-              <i  class="fa fa-info-circle" data-toggle="tooltip"
-                  data-placement="bottom"
-                  title="Filters are defined using comma delimited strings as in 'US,FR,Other'"></i>
-              <span class="collapser"> [-]</span>
-            </legend>
-            <div class="fieldset_content">
-              <div id="flt0" style="display: none;">
-                <span class="">{{ form.flt_col_0(class_="form-control inc") }}</span>
-                <div class="row">
-                  <span class="col col-sm-4">{{ form.flt_op_0(class_="form-control inc") }}</span>
-                  <span class="col col-sm-6">{{ form.flt_eq_0(class_="form-control inc") }}</span>
-                  <button type="button" class="btn btn-sm remove" aria-label="Delete filter">
-                    <span class="glyphicon glyphicon-minus"  aria-hidden="true"></span>
-                  </button>
-                </div>
-              </div>
-              <div id="filters"></div>
-              <button type="button" id="plus" class="btn btn-sm" aria-label="Add a filter">
-                <span class="glyphicon glyphicon-plus" aria-hidden="true"></span>
-              </button>
-            </div>
-          </fieldset>
+          <!--<fieldset class="fs-style">-->
+            <!--<legend class="legend-style">-->
+              <!--<span class="legend_label">Filters</span>-->
+              <!--<i  class="fa fa-info-circle" data-toggle="tooltip"-->
+                  <!--data-placement="bottom"-->
+                  <!--title="Filters are defined using comma delimited strings as in 'US,FR,Other'"></i>-->
+              <!--<span class="collapser"> [-]</span>-->
+            <!--</legend>-->
+            <!--<div class="fieldset_content">-->
+              <!--<div id="flt0" style="display: none;">-->
+                <!--<span class="">{{ form.flt_col_0(class_="form-control inc") }}</span>-->
+                <!--<div class="row">-->
+                  <!--<span class="col col-sm-4">{{ form.flt_op_0(class_="form-control inc") }}</span>-->
+                  <!--<span class="col col-sm-6">{{ form.flt_eq_0(class_="form-control inc") }}</span>-->
+                  <!--<button type="button" class="btn btn-sm remove" aria-label="Delete filter">-->
+                    <!--<span class="glyphicon glyphicon-minus"  aria-hidden="true"></span>-->
+                  <!--</button>-->
+                <!--</div>-->
+              <!--&lt;!&ndash;</div>&ndash;&gt;-->
+              <!--&lt;!&ndash;<div id="filters"></div>&ndash;&gt;-->
+              <!--&lt;!&ndash;<button type="button" id="plus" class="btn btn-sm" aria-label="Add a filter">&ndash;&gt;-->
+                <!--&lt;!&ndash;<span class="glyphicon glyphicon-plus" aria-hidden="true"></span>&ndash;&gt;-->
+              <!--&lt;!&ndash;</button>&ndash;&gt;-->
+            <!--&lt;!&ndash;</div>&ndash;&gt;-->
+          <!--</fieldset>-->
       <div class="slice-button-group">
           <button type="button" class="btn btn-primary druidify">
             <i class="fa fa-bolt"></i>

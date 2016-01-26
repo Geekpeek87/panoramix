@@ -399,6 +399,18 @@ class FormFactory(object):
                     "relative time period. Expects relative time delta "
                     "in natural language (example: 24 hours, 7 days, "
                     "56 weeks, 365 days")),
+            'x_axis_format': FreeFormSelectField('X axis format',
+                default='smart_date',
+                choices=[
+                    ('smart_date', 'Adaptative formating'),
+                    ("%m/%d/%Y", '"%m/%d/%Y" | 01/14/2019'),
+                    ("%Y-%m-%d", '"%Y-%m-%d" | 2019-01-14'),
+                    ("%Y-%m-%d %H:%M:%S", '"%Y-%m-%d %H:%M:%S" | 2019-01-14 01:32:10'),
+                    ("%H:%M:%S", '"%H:%M:%S" | 01:32:10'),
+                ],
+                description="D3 format syntax for y axis "
+                            "https://github.com/mbostock/\n"
+                            "d3/wiki/Formatting"),
             'custom_query': TextAreaField(
                 "Custom Query",
                 description="Put your custom query here", default=''),
